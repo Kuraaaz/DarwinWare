@@ -4,6 +4,8 @@
 #include <wdm.h>
 #include <ntifs.h>
 
+#pragma comment(lib, "ntoskrnl.lib")
+
 #define drv_device L"\\Device\\{XorExt}"
 #define drv_dos_device L"\\DosDevices\\{XorExt}"
 #define drv  L"\\Driver\\{XorExt}"
@@ -49,7 +51,7 @@ NTSTATUS init(PDRIVER_OBJECT driver, PUNICODE_STRING path) {
 
 	return STATUS_SUCCESS;
 }
-// get_thread_context - CORRIGÉ
+
 
 
 
@@ -66,6 +68,116 @@ NTSTATUS DriverEntry(PDRIVER_OBJECT driver, PUNICODE_STRING path) {
 	UNICODE_STRING drv_name;
 	RtlInitUnicodeString(&drv_name, drv);
 	return IoCreateDriver(&drv_name, &init);
+}
+
+NTSTATUS HandleGetThreadContext(pk_thread_context_request request)
+{
+	HANDLE thread_handle = NULL;
+	OBJECT_ATTRIBUTES object_attributes;
+	CLIENT_ID client_id;
+	NTSTATUS status = STATUS_SUCCESS;
+
+	KdPrint(("[DRIVER] GetThreadContext called for thread ID: %p\n", request->thread_id));
+
+	// Initialiser la structure CLIENT_ID avec l'ID du thread
+	client_id.UniqueProcess = NULL; // Pas besoin du processus pour PsLookupThreadByThreadId
+	client_id.UniqueThread = request->thread_id;
+
+	// Initialiser les attributs d'objet
+	InitializeObjectAttributes(&object_attributes, NULL, 0, NULL, NULL);
+
+	// 1. Ouvrir un handle vers le thread
+	status = ZwOpenThread(&thread_handle, THREAD_GET_CONTEXT, &object_attributes, &client_id);
+	if (!NT_SUCCESS(status)) {
+		KdPrint(("[DRIVER] ZwOpenThread failed: 0x%X\n", status));
+		request->status = status;
+		return status;
+	}
+
+	__try {
+		// 2. Initialiser le contexte
+		RtlZeroMemory(&request->context, sizeof(CONTEXT));
+		request->context.ContextFlags = request->context_flags;
+
+		// 3. Récupérer le contexte avec ZwGetContextThread
+		status = ZwGetContextThread(thread_handle, &request->context);
+
+		if (NT_SUCCESS(status)) {
+			KdPrint(("[DRIVER] Successfully got thread context\n"));
+#if defined(_AMD64_)
+			KdPrint(("[DRIVER] RIP: 0x%llx\n", request->context.Rip));
+#else
+			KdPrint(("[DRIVER] EIP: 0x%x\n", request->context.Eip));
+#endif
+			request->status = STATUS_SUCCESS;
+		}
+		else {
+			KdPrint(("[DRIVER] Failed to get thread context: 0x%X\n", status));
+			request->status = status;
+		}
+	}
+	__except (EXCEPTION_EXECUTE_HANDLER) {
+		status = GetExceptionCode();
+		KdPrint(("[DRIVER] Exception in GetThreadContext: 0x%X\n", status));
+		request->status = status;
+	}
+
+	// 4. Fermer le handle
+	if (thread_handle) {
+		ZwClose(thread_handle);
+	}
+
+	return status;
+}
+
+NTSTATUS HandleSetThreadContext(pk_thread_context_request request)
+{
+	HANDLE thread_handle = NULL;
+	OBJECT_ATTRIBUTES object_attributes;
+	CLIENT_ID client_id;
+	NTSTATUS status = STATUS_SUCCESS;
+
+	KdPrint(("[DRIVER] SetThreadContext called for thread ID: %p\n", request->thread_id));
+
+	// Initialiser la structure CLIENT_ID
+	client_id.UniqueProcess = NULL;
+	client_id.UniqueThread = request->thread_id;
+
+	InitializeObjectAttributes(&object_attributes, NULL, 0, NULL, NULL);
+
+	// 1. Ouvrir un handle vers le thread
+	status = ZwOpenThread(&thread_handle, THREAD_SET_CONTEXT, &object_attributes, &client_id);
+	if (!NT_SUCCESS(status)) {
+		KdPrint(("[DRIVER] ZwOpenThread failed: 0x%X\n", status));
+		request->status = status;
+		return status;
+	}
+
+	__try {
+		// 2. Définir le contexte avec ZwSetContextThread
+		status = ZwSetContextThread(thread_handle, &request->context);
+
+		if (NT_SUCCESS(status)) {
+			KdPrint(("[DRIVER] Successfully set thread context\n"));
+			request->status = STATUS_SUCCESS;
+		}
+		else {
+			KdPrint(("[DRIVER] Failed to set thread context: 0x%X\n", status));
+			request->status = status;
+		}
+	}
+	__except (EXCEPTION_EXECUTE_HANDLER) {
+		status = GetExceptionCode();
+		KdPrint(("[DRIVER] Exception in SetThreadContext: 0x%X\n", status));
+		request->status = status;
+	}
+
+	// 3. Fermer le handle
+	if (thread_handle) {
+		ZwClose(thread_handle);
+	}
+
+	return status;
 }
 
 NTSTATUS io_device_control(PDEVICE_OBJECT device, PIRP irp) {
@@ -223,6 +335,19 @@ NTSTATUS io_device_control(PDEVICE_OBJECT device, PIRP irp) {
 		}
 		info_size = sizeof(k_create_thread_request);
 	} break;
+
+	case ioctl_get_thread_context: {
+		pk_thread_context_request in = (pk_thread_context_request)irp->AssociatedIrp.SystemBuffer;
+		status = HandleGetThreadContext(in);
+		info_size = sizeof(k_thread_context_request);
+	} break;
+
+	case ioctl_set_thread_context: {
+		pk_thread_context_request in = (pk_thread_context_request)irp->AssociatedIrp.SystemBuffer;
+		status = HandleSetThreadContext(in);
+		info_size = sizeof(k_thread_context_request);
+	} break;
+
 	case ioctl_find_thread: {
 		pk_find_thread_request in = (pk_find_thread_request)irp->AssociatedIrp.SystemBuffer;
 		PEPROCESS target_proc;

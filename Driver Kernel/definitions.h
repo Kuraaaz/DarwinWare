@@ -93,6 +93,40 @@ typedef struct _k_hijack_thread_request {
 } k_hijack_thread_request, * pk_hijack_thread_request;
 
 
+NTSYSAPI
+NTSTATUS
+NTAPI
+ZwOpenThread(
+	_Out_ PHANDLE ThreadHandle,
+	_In_ ACCESS_MASK DesiredAccess,
+	_In_ POBJECT_ATTRIBUTES ObjectAttributes,
+	_In_ PCLIENT_ID ClientId
+);
+
+NTSYSAPI
+NTSTATUS
+NTAPI
+ZwClose(
+	_In_ HANDLE Handle
+);
+
+// Déclarations CORRECTES pour les fonctions de contexte
+NTSYSAPI
+NTSTATUS
+NTAPI
+ZwGetContextThread(
+	_In_ HANDLE ThreadHandle,
+	_Inout_ PCONTEXT Context
+);
+
+NTSYSAPI
+NTSTATUS
+NTAPI
+ZwSetContextThread(
+	_In_ HANDLE ThreadHandle,
+	_In_ PCONTEXT Context
+);
+
 typedef struct _RTL_PROCESS_MODULE_INFORMATION
 {
 	HANDLE Section;

@@ -208,6 +208,64 @@ void TestDriverFunctions() {
     }
 }
 
+void TestThreadContext() {
+    std::cout << "\n TEST GET/SET THREAD CONTEXT\n";
+
+    HANDLE threadId = NULL;
+    if (!comDriver::FindThread(&threadId)) {
+        std::cout << "Aucun thread trouvé pour tester\n";
+        return;
+    }
+
+    std::cout << "Thread trouvé: 0x" << std::hex << threadId << std::dec << "\n";
+
+    CONTEXT ctx = { 0 };
+    ctx.ContextFlags = CONTEXT_ALL;
+
+    std::cout << "Récupération du contexte... ";
+    if (comDriver::GetThreadContext(threadId, &ctx)) {
+        std::cout << "SUCCÈS!\n";
+
+#if defined(_WIN64)
+        std::cout << "RIP: 0x" << std::hex << ctx.Rip << std::dec << "\n";
+        std::cout << "RSP: 0x" << std::hex << ctx.Rsp << std::dec << "\n";
+        std::cout << "RAX: 0x" << std::hex << ctx.Rax << std::dec << "\n";
+#else
+        std::cout << "EIP: 0x" << std::hex << ctx.Eip << std::dec << "\n";
+        std::cout << "ESP: 0x" << std::hex << ctx.Esp << std::dec << "\n";
+        std::cout << "EAX: 0x" << std::hex << ctx.Eax << std::dec << "\n";
+#endif
+
+        // Test modification du contexte
+        std::cout << "Test modification EIP/RIP... ";
+#if defined(_WIN64)
+        ULONG_PTR originalRip = ctx.Rip;
+        ctx.Rip += 0x10; // Petit décalage
+#else
+        DWORD originalEip = ctx.Eip;
+        ctx.Eip += 0x10; // Petit décalage
+#endif
+
+        if (comDriver::SetThreadContext(threadId, &ctx)) {
+            std::cout << "SUCCÈS!\n";
+
+            // Restaurer l'original
+#if defined(_WIN64)
+            ctx.Rip = originalRip;
+#else
+            ctx.Eip = originalEip;
+#endif
+            comDriver::SetThreadContext(threadId, &ctx);
+        }
+        else {
+            std::cout << "ÉCHEC\n";
+        }
+    }
+    else {
+        std::cout << "ÉCHEC\n";
+    }
+}
+
 // NOUVELLE FONCTION : Tester la création de thread
 void TestThreadCreation() {
     std::cout << "\n TEST DE CRÉATION DE THREAD\n";
@@ -264,7 +322,8 @@ void PrintMenu() {
     std::cout << "4.  Test driver's functions (debug) \n";
     std::cout << "5.  Test thread creation\n";
     std::cout << "6.  Test find thread\n";  // NOUVELLE OPTION
-    std::cout << "7.  Leave\n";  // Changé de 6 à 7
+    std::cout << "7. Test Get/Set Thread Context\n";  // NOUVELLE OPTION
+    std::cout << "8. Leave\n";  // Changé de 7 à 8
     std::cout << "=========================================\n";
     std::cout << "Choice: ";
 }
@@ -409,13 +468,18 @@ int main() {
             }
             break;
         
-            
-        case 7:  // Changé de 6 à 7
+        case 7:
+            if (comDriver::hDriver && comDriver::hDriver != INVALID_HANDLE_VALUE && comDriver::pid != 0) {
+                TestThreadContext();
+            }
+            else {
+                std::cout << " Driver non initialisé ou PID non défini!\n";
+            }
+            break;
+        case 8:  // Changé de 7 à 8
             std::cout << " Au revoir!\n";
             break;
-        default:
-            std::cout << " Choix invalide!\n";
-            break;
+
         }
 
         if (choice != 6) {  // Changé de 6 à 7

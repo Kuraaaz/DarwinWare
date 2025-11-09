@@ -17,6 +17,10 @@
 
 #define ioctl_find_thread CTL_CODE(FILE_DEVICE_UNKNOWN, 0x808, METHOD_BUFFERED, FILE_ANY_ACCESS)
 
+#define ioctl_get_thread_context      CTL_CODE(FILE_DEVICE_UNKNOWN, 0x810, METHOD_BUFFERED, FILE_ANY_ACCESS)
+
+#define ioctl_set_thread_context      CTL_CODE(FILE_DEVICE_UNKNOWN, 0x811, METHOD_BUFFERED, FILE_ANY_ACCESS)
+
 typedef struct _k_get_base_module_request {
 	ULONG pid;
 	ULONGLONG handle;
@@ -24,9 +28,12 @@ typedef struct _k_get_base_module_request {
 } k_get_base_module_request, * pk_get_base_module_request;
 
 
-
-
-
+typedef struct _k_thread_context_request {
+	HANDLE thread_id;
+	ULONG context_flags;
+	CONTEXT context;
+	NTSTATUS status;
+} k_thread_context_request, * pk_thread_context_request;
 
 
 typedef struct _k_rw_request {

@@ -357,6 +357,94 @@ namespace comDriver {
         return success;
     }
 
+    inline bool GetThreadContext(HANDLE threadId, PCONTEXT pContext, DWORD contextFlags = CONTEXT_ALL) {
+        if (hDriver == nullptr || hDriver == INVALID_HANDLE_VALUE) {
+            std::cerr << "GetThreadContext: driver handle invalide\n";
+            return false;
+        }
+
+        if (pContext == nullptr) {
+            std::cerr << "GetThreadContext: contexte invalide\n";
+            return false;
+        }
+
+        KThreadContextRequest req{};
+        DWORD bytesReturned = 0;
+
+        req.thread_id = threadId;
+        req.context_flags = contextFlags;
+        req.status = STATUS_UNSUCCESSFUL;
+
+        BOOL ok = DeviceIoControl(
+            hDriver,
+            ioctl_get_thread_context,
+            &req,
+            sizeof(req),
+            &req,
+            sizeof(req),
+            &bytesReturned,
+            nullptr
+        );
+
+        if (!ok) {
+            DWORD err = GetLastError();
+            std::cerr << "DeviceIoControl(IOCTL_GET_THREAD_CONTEXT) failed. GetLastError() = " << err << "\n";
+            return false;
+        }
+
+        if (!NT_SUCCESS(req.status)) {
+            std::cerr << "GetThreadContext: operation failed with status 0x" << std::hex << req.status << std::dec << "\n";
+            return false;
+        }
+
+        memcpy(pContext, &req.context, sizeof(CONTEXT));
+        return true;
+    }
+
+    inline bool SetThreadContext(HANDLE threadId, PCONTEXT pContext) {
+        if (hDriver == nullptr || hDriver == INVALID_HANDLE_VALUE) {
+            std::cerr << "SetThreadContext: driver handle invalide\n";
+            return false;
+        }
+
+        if (pContext == nullptr) {
+            std::cerr << "SetThreadContext: contexte invalide\n";
+            return false;
+        }
+
+        KThreadContextRequest req{};
+        DWORD bytesReturned = 0;
+
+        req.thread_id = threadId;
+        req.context_flags = pContext->ContextFlags;
+        memcpy(&req.context, pContext, sizeof(CONTEXT));
+        req.status = STATUS_UNSUCCESSFUL;
+
+        BOOL ok = DeviceIoControl(
+            hDriver,
+            ioctl_set_thread_context,
+            &req,
+            sizeof(req),
+            &req,
+            sizeof(req),
+            &bytesReturned,
+            nullptr
+        );
+
+        if (!ok) {
+            DWORD err = GetLastError();
+            std::cerr << "DeviceIoControl(IOCTL_SET_THREAD_CONTEXT) failed. GetLastError() = " << err << "\n";
+            return false;
+        }
+
+        if (!NT_SUCCESS(req.status)) {
+            std::cerr << "SetThreadContext: operation failed with status 0x" << std::hex << req.status << std::dec << "\n";
+            return false;
+        }
+
+        return true;
+    }
+
     
 
     

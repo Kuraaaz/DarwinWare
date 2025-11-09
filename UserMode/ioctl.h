@@ -19,6 +19,10 @@
 
 #define ioctl_find_thread CTL_CODE(FILE_DEVICE_UNKNOWN, 0x808, METHOD_BUFFERED, FILE_ANY_ACCESS)
 
+#define ioctl_get_thread_context      CTL_CODE(FILE_DEVICE_UNKNOWN, 0x810, METHOD_BUFFERED, FILE_ANY_ACCESS)
+
+#define ioctl_set_thread_context      CTL_CODE(FILE_DEVICE_UNKNOWN, 0x811, METHOD_BUFFERED, FILE_ANY_ACCESS)
+
 //structs
 
 typedef struct _KFindThreadRequest {
@@ -44,6 +48,13 @@ struct KAllocMemRequest {
 	ULONGLONG addr;
 	SIZE_T size;
 };
+
+typedef struct _KThreadContextRequest {
+	HANDLE thread_id;
+	ULONG context_flags;
+	CONTEXT context;
+	NTSTATUS status;
+} KThreadContextRequest, * PKThreadContextRequest;
 
 struct KProtectMemRequest {
 	ULONG pid, protect;
